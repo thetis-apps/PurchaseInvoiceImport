@@ -254,21 +254,24 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 							} else {
 								
 								String value = String.join(" ", texts);
-								if (value.equals("Nummer") || value.equals("VARENR")) {
+								
+								System.out.println(value);
+								
+								if (value.equals("Nummer") || value.equals("VARENR") || value.equals("No.") || value.contentEquals("Art.code")) {
 									itemNumberIdx = cell.getColumnIndex();
-								} else if (value.equals("Beskrivelse") || value.equals("VAREBETEGNELSE")) {
+								} else if (value.equals("Beskrivelse") || value.equals("VAREBETEGNELSE") || value.equals("Description")) {
 									itemNameIdx = cell.getColumnIndex();
-								} else if (value.equals("Antal") || value.equals("ANTAL")) {
+								} else if (value.equals("Antal") || value.equals("ANTAL") || value.equals("Quantit y") || value.equals("Quantity")) {
 									qtyIdx = cell.getColumnIndex();
 								} else if (value.equals("Enhed")) {
 									unitIdx = cell.getColumnIndex();
 								} else if (value.equals("Antal Enhed")) {
 									qtyIdx = cell.getColumnIndex();
-								} else if (value.equals("Enhedspris") || value.equals("A PRIS")) {
+								} else if (value.equals("Enhedspris") || value.equals("A PRIS") || value.equals("Unit Price") || value.equals("Price E")) {
 									priceIdx = cell.getColumnIndex();
-								} else if (value.endsWith("pct.") || value.equals("%")) {
+								} else if (value.endsWith("pct.") || value.equals("%") || value.equals("Discount %") || value.equals("")) {
 									discountPercentageIdx = cell.getColumnIndex();
-								} else if (value.equals("Belob") || value.equals("BELOB")) {
+								} else if (value.equals("Belob") || value.equals("BELOB") || value.equals("Amount") || value.equals("Sum E")) {
 									amountIdx = cell.getColumnIndex();
 								}
 							}
@@ -399,7 +402,16 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 
 	private Double parseDouble(List<String> texts) throws ParseException {
 		try {
-			String text = texts.get(0);
+			String text;
+			if (texts.size() > 1) {
+				if (texts.get(0).matches("[0-9]*")) {
+					text = texts.get(0) + "." + texts.get(1);
+				} else {
+					text = texts.get(0);
+				}
+			} else {
+				text = texts.get(0);
+			}
 			if (text == null) {
 				return null;
 			}
