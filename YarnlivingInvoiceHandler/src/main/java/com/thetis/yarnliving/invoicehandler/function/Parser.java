@@ -1,5 +1,6 @@
 package com.thetis.yarnliving.invoicehandler.function;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -24,6 +25,8 @@ import com.amazonaws.services.textract.AmazonTextractClientBuilder;
 import com.amazonaws.services.textract.model.Block;
 import com.amazonaws.services.textract.model.GetDocumentAnalysisRequest;
 import com.amazonaws.services.textract.model.GetDocumentAnalysisResult;
+import com.amazonaws.services.textract.model.GetDocumentTextDetectionRequest;
+import com.amazonaws.services.textract.model.GetDocumentTextDetectionResult;
 import com.amazonaws.services.textract.model.Relationship;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -78,12 +81,12 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 	        	boolean finished = false;
 	            while (!finished) {
 	            	
-					GetDocumentAnalysisRequest request= new GetDocumentAnalysisRequest()
+					GetDocumentTextDetectionRequest request= new GetDocumentTextDetectionRequest()
 	                        .withJobId(completion.getJobId())
 	                        .withMaxResults(100000)
 	                        .withNextToken(paginationToken);
 	                
-	                GetDocumentAnalysisResult result = textract.getDocumentAnalysis(request);
+	                GetDocumentTextDetectionResult result = textract.getDocumentTextDetection(request);
 
 	                List<Block> blocks= result.getBlocks();
 	                for (Block block : blocks) {
@@ -101,12 +104,14 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 
  				Invoice invoice;
 	            
- 				if (inboundShipment.getSupplierNumber().equals("10")) {
- 					invoice = parseFromLines(blockMap);
- 				} else {
- 					invoice = parseFromTables(blockMap);
- 				}
+ 		    	String supplierNumber = inboundShipment.getSupplierNumber();
+				InputStream is = this.getClass().getResourceAsStream("/resources/dataDocument_" + supplierNumber + ".json");
+ 		    	Definition definition = mapper.readValue(is, Definition.class);
 
+ 		    	System.out.println(definition.toString());
+ 		    	
+ 				invoice = parseFromLines(supplierNumber, definition, blockMap);
+ 
 	            System.out.println(invoice.toString());
 	            
             	List<InboundShipmentLine> inboundShipmentLines = inboundShipment.getInboundShipmentLines();
@@ -137,6 +142,7 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 	            		
             			Long qty = BigDecimal.valueOf(line.getQty()).multiply(factor).longValue();
 	            		BigDecimal price = BigDecimal.valueOf(line.getPrice()).divide(factor, 2, RoundingMode.HALF_UP);
+	            		BigDecimal amount = BigDecimal.valueOf(line.getAmount());
 
 	            		Long numItemsExpected = inboundShipmentLine.getNumItemsExpected();
 	            		if (numItemsExpected == null || qty != inboundShipmentLine.getNumItemsExpected()) {
@@ -148,9 +154,11 @@ public class Parser implements RequestHandler<SNSEvent, String> {
             				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "purchasePrice", price, InboundShipmentLine.class);
 	            		}
 						
-						BigDecimal discountPercentage = inboundShipmentLine.getDiscountPercentage();
-						if (discountPercentage == null || line.getDiscountPercentage() != discountPercentage.doubleValue()) {
-            				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "discountPercentage", BigDecimal.valueOf(line.getDiscountPercentage() != null ? line.getDiscountPercentage() : 0), InboundShipmentLine.class);
+						BigDecimal amountBeforeDiscount = price.multiply(BigDecimal.valueOf(qty));
+						BigDecimal discount = amountBeforeDiscount.subtract(amount);
+						if (!discount.equals(BigDecimal.ZERO)) {
+							BigDecimal discountPercentage = discount.multiply(BigDecimal.valueOf(100)).divide(amountBeforeDiscount, 2, RoundingMode.HALF_UP);
+            				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "discountPercentage", discountPercentage, InboundShipmentLine.class);
 	            		}
 						
         				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "suppliersDescription", line.getPageNumber() * 1000 + line.getLineNumber(), InboundShipmentLine.class);
@@ -159,7 +167,7 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 						
 	            	} else {
 	            		
-	            		String messageText = MessageFormat.format("Cannot find trade item with SKU or suppliers item number equal to {0}. The name of the item is {1}.", line.getItemNumber(), line.getItemName());
+	            		String messageText = MessageFormat.format("Cannot find trade item with SKU or suppliers item number equal to {0}.", line.getItemNumber());
 	            		
     					EventMessage eventMessage = new EventMessage();
     					eventMessage.setMessageType("WARNING");
@@ -177,6 +185,7 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 	            
 	            for (InboundShipmentLine inboundShipmentLine : inboundShipmentLines) {
     				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "numItemsExpected", 0L, InboundShipmentLine.class);
+    				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "suppliersDescription", "", InboundShipmentLine.class);
 	            }
 	            
 	            System.out.println(sum);
@@ -198,127 +207,11 @@ public class Parser implements RequestHandler<SNSEvent, String> {
         return "Hello from Lambda!";
     }
 
-	private Invoice parseFromTables(Map<String, Block> blockMap) throws ParseException {
-		
+	private Invoice parseFromLines(String supplierNumber, Definition definition, Map<String, Block> blockMap) throws ParseException {
 		Invoice invoice = new Invoice();
-		for (Block block : blockMap.values()) {
-			
-			if (block.getBlockType().equals("TABLE")) {
-				
-				// Handle table
-				
-				int lineNumber = 1;
-				
-				int itemNumberIdx = 0;
-				int itemNameIdx = 0;
-				int unitIdx = 0;
-				int qtyIdx = 0;
-				int priceIdx = 0;
-				int discountPercentageIdx = 0;
-				int amountIdx = 0;
-				
-				for (Relationship relationship1 : block.getRelationships()) {
-					
-					if (relationship1.getType().equals("CHILD")) {
-						
-						Line line = new Line();
-						
-						for (String cellId : relationship1.getIds()) {
-							
-							// Handle cell
-
-							Block cell = blockMap.get(cellId);
-							
-							List<String> texts = getTexts(blockMap, cell);
-							
-							if (cell.getRowIndex() > 1) {
-		    					
-								if (!texts.isEmpty()) {
-								
-		    						if (cell.getColumnIndex() == itemNumberIdx) {
-		    							line.setItemNumber(String.join(" ", texts));
-		    						} else if (cell.getColumnIndex() == itemNameIdx) {
-		        						line.setItemName(String.join(" ", texts));
-		    						} else if (cell.getColumnIndex() == qtyIdx) {
-		    							line.setQty(parseDouble(texts));
-		    						} else if (cell.getColumnIndex() == priceIdx) {
-		    							line.setPrice(parseDouble(texts));
-		    						} else if (cell.getColumnIndex() == discountPercentageIdx) {
-		    							line.setDiscountPercentage(parseDouble(texts));
-		    						} else if (cell.getColumnIndex() == amountIdx) {	
-		    							line.setAmount(parseDouble(texts));
-		    						}
-		    						
-								}
-								
-							} else {
-								
-								String value = String.join(" ", texts);
-								
-								System.out.println(value);
-								
-								if (value.equals("Nummer") || value.equals("VARENR") || value.equals("No.") || value.contentEquals("Art.code")) {
-									itemNumberIdx = cell.getColumnIndex();
-								} else if (value.equals("Beskrivelse") || value.equals("VAREBETEGNELSE") || value.equals("Description")) {
-									itemNameIdx = cell.getColumnIndex();
-								} else if (value.equals("Antal") || value.equals("ANTAL") || value.equals("Quantit y") || value.equals("Quantity")) {
-									qtyIdx = cell.getColumnIndex();
-								} else if (value.equals("Enhed")) {
-									unitIdx = cell.getColumnIndex();
-								} else if (value.equals("Antal Enhed")) {
-									qtyIdx = cell.getColumnIndex();
-								} else if (value.equals("Enhedspris") || value.equals("A PRIS") || value.equals("Unit Price") || value.equals("Price E")) {
-									priceIdx = cell.getColumnIndex();
-								} else if (value.endsWith("pct.") || value.equals("%") || value.equals("Discount %") || value.equals("")) {
-									discountPercentageIdx = cell.getColumnIndex();
-								} else if (value.equals("Belob") || value.equals("BELOB") || value.equals("Amount") || value.equals("Sum E")) {
-									amountIdx = cell.getColumnIndex();
-								}
-							}
-
-							// If we have all necessary information flush line to collection
-							
-		    				if (line.getItemNumber() != null && line.getQty() != null && 
-		    						line.getPrice() != null && line.getAmount() != null) {
-			            		line.setPageNumber(block.getPage());
-			            		line.setLineNumber(lineNumber);
-								lineNumber++;
-			            		invoice.getLines().add(line);
-			            		line = new Line();
-		    				}
-						
-						}
-
-					} 
-					
-				}
-				
-			}
-		}
 		
-		return invoice;
-	}
-	
-	private class Range {
+		List<Field> fields = definition.getFields();
 		
-		private double start;
-
-		private double end;
-		
-		public Range(double start, double end) {
-			super();
-			this.start = start;
-			this.end = end;
-		}
-
-		private boolean within(double x) {
-			return x >= start && x <= end;
-		}
-		
-	}
-	
-	private Invoice parseFromLines(Map<String, Block> blockMap) throws ParseException {
-		Invoice invoice = new Invoice();
 		for (Block block : blockMap.values()) {
 			
 			if (block.getBlockType().equals("PAGE")) {
@@ -327,15 +220,9 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 				
 				int lineNumber = 1;
 				
-				Range itemNumberRange = new Range(0.050, 0.064);
-				Range itemNameRange = new Range(0.230, 0.232);
-				Range unitRange = new Range(0, 0);
-				Range qtyRange = new Range(0.500, 0.600);
-				Range priceRange = new Range(0.600, 0.740);
-				Range discountPercentageRange = new Range(0.750, 0.800);
-				Range amountRange = new Range(0.810, 1);
-				
 				int state = 0;
+				
+				double topOfLine = 0;
 				
 				for (Relationship relationship1 : block.getRelationships()) {
 					
@@ -349,45 +236,53 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 
 							Block line = blockMap.get(cellId);
 							
-							System.out.println("State: " + state + " Line: " + line.getText());
+							String text = line.getText();
 							
-							double pos = line.getGeometry().getBoundingBox().getLeft();
+							// State equals the index in the fields array
 							
-							if (state == 0) {
-								if (line.getText().equals("Item #") && itemNumberRange.within(pos)) {
-									state = 1;
-								} 
-							} else if (state == 1) {
-								if (line.getText().equals("Total")) {
-									state = 2;
-								} 
-							} else if (state == 2) {
-								List<String> texts = getTexts(blockMap, line);
-								if (itemNumberRange.within(pos)) {
-									invoiceLine.setItemNumber(line.getText());
-								} else if (itemNameRange.within(pos)) {
-									invoiceLine.setItemName(line.getText());
-								} else if (qtyRange.within(pos)) {
-									invoiceLine.setQty(parseDouble(texts));
-								} else if (priceRange.within(pos)) {
-									invoiceLine.setPrice(parseDouble(texts));
-								} else if (discountPercentageRange.within(pos)) {
-									invoiceLine.setDiscountPercentage(parseDouble(texts));
-								} else if (amountRange.within(pos)) {
-									invoiceLine.setAmount(parseDouble(texts));
+							double left = line.getGeometry().getBoundingBox().getLeft();
+							double width = line.getGeometry().getBoundingBox().getWidth();
+							double top = line.getGeometry().getBoundingBox().getTop();
+							double height = line.getGeometry().getBoundingBox().getHeight();
+							
+							if (top + height > topOfLine + definition.getLineHeight()) {
+								
+								if (state > 0) {
+									System.out.println("*** SKIPPING *** " + invoiceLine.toString());
 								}
 								
-			    				if (invoiceLine.getItemNumber() != null && invoiceLine.getQty() != null && 
-			    						invoiceLine.getPrice() != null && invoiceLine.getAmount() != null) {
-				            		invoiceLine.setPageNumber(block.getPage());
-				            		invoiceLine.setLineNumber(lineNumber);
-									lineNumber++;
-				            		invoice.getLines().add(invoiceLine);
-				            		invoiceLine = new Line();
-			    				}
-			    				
+								state = 0;
+								invoiceLine = new Line();		
 							}
+
+							System.out.println("State: " + state + " Line: " + text + " Left: " + left + " Width: " + width);
+
+							Field field = fields.get(state);
+							if (field.within(left, width)) {
+								
+								if (state == 0) {
+									topOfLine = top;
+								}
+								
+								List<String> texts = getTexts(blockMap, line);
+								boolean match = setTargetField(supplierNumber, field, invoiceLine, texts);
+								if (match) {
+									state++;
+								}
+							}
+
+							// If we have all necessary information start new line
 							
+		    				if (invoiceLine.getItemNumber() != null && invoiceLine.getQty() != null && 
+		    						invoiceLine.getPrice() != null && invoiceLine.getAmount() != null) {
+			            		invoiceLine.setPageNumber(block.getPage());
+			            		invoiceLine.setLineNumber(lineNumber);
+								lineNumber++;
+			            		invoice.getLines().add(invoiceLine);
+			            		invoiceLine = new Line();
+			            		state = 0;
+		    				}
+				    				
 						}
 
 					} 
@@ -400,25 +295,75 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 		return invoice;
 	}
 
-	private Double parseDouble(List<String> texts) throws ParseException {
-		try {
-			String text;
-			if (texts.size() > 1) {
-				if (texts.get(0).matches("[0-9]*")) {
-					text = texts.get(0) + "." + texts.get(1);
+	private boolean setTargetField(String supplierNumber, Field field, Line invoiceLine, List<String> texts) {
+		boolean match = true;
+		if (field.getTarget() == Target.ITEM_NUMBER) {
+			if (supplierNumber.equals("03")) {
+				if (texts.size() > 1) {
+					invoiceLine.setItemNumber(texts.get(1));
 				} else {
-					text = texts.get(0);
+					match = false;
 				}
+			} else if (supplierNumber.equals("08")) {
+				if (texts.size() > 2) {
+					invoiceLine.setItemNumber(texts.get(2));
+				} else {
+					match = false;
+				}
+			} else if (supplierNumber.equals("23")) {
+				if (texts.size() > 2) {
+					invoiceLine.setItemNumber(texts.get(0) + texts.get(1));
+				} else {
+					match = false;
+				}
+			} else if (supplierNumber.equals("02") || supplierNumber.equals("27")) {
+				if (texts.size() > 1 && texts.get(0).startsWith("Vare")) {
+					invoiceLine.setItemNumber(texts.get(texts.size() - 1));
+				} else {
+					match = false;
+				}
+			} else {
+				invoiceLine.setItemNumber(texts.get(0));
+			}
+		} else if (field.getTarget() == Target.QTY) {
+			try {
+				invoiceLine.setQty(parseDouble(texts));
+			} catch (ParseException e) {
+				match = false;
+			}
+		} else if (field.getTarget() == Target.PRICE) {
+			try {
+				invoiceLine.setPrice(parseDouble(texts));
+			} catch (ParseException e) {
+				match = false;
+			}
+		} else if (field.getTarget() == Target.AMOUNT) {
+			try {
+				invoiceLine.setAmount(parseDouble(texts));
+			} catch (ParseException e) {
+				match = false;
+			}
+		} else {
+			throw new IllegalStateException("Unknown target for field.");
+		}
+		return match;
+	}
+
+	private Double parseDouble(List<String> texts) throws ParseException {
+		String text;
+		if (texts.size() > 1) {
+			if (texts.get(0) != null && texts.get(0).matches("[0-9]*")) {
+				text = texts.get(0) + "." + texts.get(1);
 			} else {
 				text = texts.get(0);
 			}
-			if (text == null) {
-				return null;
-			}
-			return decimalFormat.parse(text).doubleValue();
-		} catch (ParseException e) {
+		} else {
+			text = texts.get(0);
+		}
+		if (text == null) {
 			return null;
 		}
+		return decimalFormat.parse(text).doubleValue();
 	}
 
 	private List<String> getTexts(Map<String, Block> blockMap, Block cell) {

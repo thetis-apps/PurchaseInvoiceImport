@@ -4,13 +4,9 @@ public class Line {
 	
 	private String itemNumber;
 	
-	private String itemName;
-	
 	private Double qty;
 	
 	private Double price;
-	
-	private Double discountPercentage;
 	
 	private Double amount;
 	
@@ -42,14 +38,6 @@ public class Line {
 		this.price = price;
 	}
 
-	public Double getDiscountPercentage() {
-		return discountPercentage;
-	}
-
-	public void setDiscountPercentage(Double discountPercentage) {
-		this.discountPercentage = discountPercentage;
-	}
-
 	public Double getAmount() {
 		return amount;
 	}
@@ -58,12 +46,10 @@ public class Line {
 		this.amount = amount;
 	}
 
-	public String getItemName() {
-		return itemName;
-	}
-
-	public void setItemName(String itemName) {
-		this.itemName = itemName;
+	@Override
+	public String toString() {
+		return "Line [itemNumber=" + itemNumber + ", qty=" + qty + ", price=" + price + ", amount=" + amount
+				+ ", pageNumber=" + pageNumber + ", lineNumber=" + lineNumber + "]";
 	}
 
 	public int getPageNumber() {
@@ -82,10 +68,5 @@ public class Line {
 		this.lineNumber = lineNumber;
 	}
 
-	@Override
-	public String toString() {
-		return "Line [itemNumber=" + itemNumber + ", itemName=" + itemName + ", qty=" + qty + ", price=" + price
-				+ ", discountPercentage=" + discountPercentage + ", amount=" + amount + "]";
-	}
 
 }

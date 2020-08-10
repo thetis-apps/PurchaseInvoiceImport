@@ -16,6 +16,8 @@ import com.amazonaws.services.textract.model.NotificationChannel;
 import com.amazonaws.services.textract.model.S3Object;
 import com.amazonaws.services.textract.model.StartDocumentAnalysisRequest;
 import com.amazonaws.services.textract.model.StartDocumentAnalysisResult;
+import com.amazonaws.services.textract.model.StartDocumentTextDetectionRequest;
+import com.amazonaws.services.textract.model.StartDocumentTextDetectionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thetis.pack.client.model.Event;
 import com.thetis.pack.client.model.EventDetail;
@@ -48,15 +50,14 @@ public class Starter implements RequestHandler<Event, String> {
                     "https://textract.eu-west-1.amazonaws.com", "eu-west-1");
             AmazonTextract client = AmazonTextractClientBuilder.standard()
                     .withEndpointConfiguration(endpoint).build();
-
-            StartDocumentAnalysisRequest request = new StartDocumentAnalysisRequest()
+            
+            StartDocumentTextDetectionRequest request = new StartDocumentTextDetectionRequest()
             		.withDocumentLocation(new DocumentLocation().withS3Object(new S3Object().withName(key).withBucket(bucketName)))
             		.withNotificationChannel(new NotificationChannel().withSNSTopicArn(completionTopic).withRoleArn(completionRole))
             		.withClientRequestToken(detail.getEventId())
-            		.withJobTag(detail.getEntityId().toString() + "_" + detail.getEventId())
-            		.withFeatureTypes(Arrays.asList("TABLES", "FORMS"));
+            		.withJobTag(detail.getEntityId().toString() + "_" + detail.getEventId());
 
-            StartDocumentAnalysisResult result = client.startDocumentAnalysis(request);
+            StartDocumentTextDetectionResult result = client.startDocumentTextDetection(request);
             
             ObjectMapper mapper = new ObjectMapper();
             System.out.println(mapper.writeValueAsString(result));
