@@ -1,0 +1,9 @@
+{	
+	"lineHeight": 0.015,
+	"fields": [
+		{ "start": 0.18, "width": 0.30, "target": "ITEM_NUMBER" },
+		{ "start": 0.55, "width": 0.08, "target": "QTY" },
+		{ "start": 0.65, "width": 0.10, "target": "PRICE" },
+		{ "start": 0.78, "width": 0.10, "target": "AMOUNT" }
+	]
+}

@@ -310,6 +310,12 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 				} else {
 					match = false;
 				}
+			} else if (supplierNumber.equals("05")) {
+				if (texts.size() > 1) {
+					invoiceLine.setItemNumber(texts.get(0).replace("[", "").replace("]", ""));
+				} else {
+					match = false;
+				}
 			} else if (supplierNumber.equals("23")) {
 				if (texts.size() > 2) {
 					invoiceLine.setItemNumber(texts.get(0) + texts.get(1));

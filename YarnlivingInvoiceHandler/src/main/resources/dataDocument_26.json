@@ -1,9 +1,9 @@
 {	
 	"lineHeight": 0.015,
 	"fields": [
-		{ "start": 0.04, "width": 0.11, "target": "ITEM_NUMBER" },
-		{ "start": 0.57, "width": 0.05, "target": "QTY" },
-		{ "start": 0.73, "width": 0.07, "target": "PRICE" },
-		{ "start": 0.90, "width": 0.07, "target": "AMOUNT" }
+		{ "start": 0.03, "width": 0.10, "target": "ITEM_NUMBER" },
+		{ "start": 0.52, "width": 0.08, "target": "QTY" },
+		{ "start": 0.70, "width": 0.10, "target": "PRICE" },
+		{ "start": 0.82, "width": 0.10, "target": "AMOUNT" }
 	]
 }
