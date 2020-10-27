@@ -156,8 +156,9 @@ public class Parser implements RequestHandler<SNSEvent, String> {
 						
 						BigDecimal amountBeforeDiscount = price.multiply(BigDecimal.valueOf(qty));
 						BigDecimal discount = amountBeforeDiscount.subtract(amount);
-						if (!discount.equals(BigDecimal.ZERO)) {
+						if (discount.compareTo(BigDecimal.ZERO) > 0) {
 							BigDecimal discountPercentage = discount.multiply(BigDecimal.valueOf(100)).divide(amountBeforeDiscount, 2, RoundingMode.HALF_UP);
+							discountPercentage = discountPercentage.max(BigDecimal.valueOf(100));
             				pack.put("inboundShipmentLines", inboundShipmentLine.getId(), "discountPercentage", discountPercentage, InboundShipmentLine.class);
 	            		}
 						
