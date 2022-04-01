@@ -1,8 +1,6 @@
 package com.thetis.yarnliving.invoicehandler.function;
 
 import java.net.URL;
-import java.util.Arrays;
-
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -14,13 +12,11 @@ import com.amazonaws.services.textract.AmazonTextractClientBuilder;
 import com.amazonaws.services.textract.model.DocumentLocation;
 import com.amazonaws.services.textract.model.NotificationChannel;
 import com.amazonaws.services.textract.model.S3Object;
-import com.amazonaws.services.textract.model.StartDocumentAnalysisRequest;
-import com.amazonaws.services.textract.model.StartDocumentAnalysisResult;
 import com.amazonaws.services.textract.model.StartDocumentTextDetectionRequest;
 import com.amazonaws.services.textract.model.StartDocumentTextDetectionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thetis.pack.client.model.Event;
-import com.thetis.pack.client.model.EventDetail;
+import com.thetis.ims.client.model.Event;
+import com.thetis.ims.client.model.EventDetail;
 
 public class Starter implements RequestHandler<Event, String> {
 

@@ -48,7 +48,8 @@
       	  "source": [ "public.thetis-ims.com" ], 
       	  "detail-type": [ "fileAttached" ],
           "detail": {
-            "entityName": [ "InboundShipment" ]
+            "entityName": [ "InboundShipment" ],
+            "subscriberId": [ "399" ]
           }
         },	       
         "Targets" : [ 

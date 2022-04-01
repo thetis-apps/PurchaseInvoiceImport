@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thetis.pack.client.Mapper;
+import com.thetis.ims.client.Mapper;
 
 public class MapperImpl extends ObjectMapper implements Mapper {
 
