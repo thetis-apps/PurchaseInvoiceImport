@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Application for importing purchase invoices
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: thetis-ims-purchase-invoice-import
+    Description: Application for importing purchase invoices
+    Author: thetis-apps
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: ../../LICENSE.txt
+    ReadmeUrl: ../../README.md
+    Labels:
+    - thetis-ims
+    HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
+    SemanticVersion: '0.0.0'
+    SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
+Globals:
+  Function:
+    Runtime: nodejs16.x
+    MemorySize: 512
+Parameters:
+  ContextId:
+    Type: String
+    Description: Context that this application is handling events for.
+    MinLength: '1'
+  ClientId:
+    Description: Key of the parameter that has your Thetis client id as its value.
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: ThetisClientId
+  ClientSecret:
+    Description: Key of the parameter that has your Thetis client secret as its value.
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: ThetisClientSecret
+  ApiKey:
+    Description: The api key that gives access to the context in Thetis IMS.
+    Type: String
+    MinLength: 1
+  DevOpsEmail:
+    Description: The email address to send mail to when messages in the dead letter
+      queue.
+    Type: String
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - BucketKeyEnabled: true
+  CompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties: {}
+  CompletionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - textract.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Description: Role for Textract to send completion message.
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+  Rule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+        - public.thetis-ims.com
+        detail-type:
+        - fileAttached
+        detail:
+          entityName:
+          - InboundShipment
+          contextId:
+          - Ref: ContextId
+      Targets:
+      - Id: EventTarget
+        Arn:
+          Fn::GetAtt:
+          - StartFunction
+          - Arn
+  StartPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - StartFunction
+        - Arn
+      Principal: events.amazonaws.com
+  StartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handler.startHandler
+      MemorySize: 2048
+      Timeout: 30
+      Policies:
+      - AmazonTextractFullAccess
+      - AmazonS3FullAccess
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+      Environment:
+        Variables:
+          BucketName:
+            Ref: Bucket
+          CompletionTopic:
+            Ref: CompletionTopic
+          CompletionRole:
+            Fn::GetAtt:
+            - CompletionRole
+            - Arn
+      CodeUri: StartFunction
+    Metadata:
+      SamResourceId: StartFunction
+  ParseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handler.completionHandler
+      Policies:
+      - AmazonTextractFullAccess
+      Events:
+        Complete:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: CompletionTopic
+            FilterPolicy: {}
+      Environment:
+        Variables:
+          ClientId:
+            Ref: ClientId
+          ClientSecret:
+            Ref: ClientSecret
+          ApiKey:
+            Ref: ApiKey
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+      MemorySize: 2048
+      Timeout: 30
+      CodeUri: ParseFunction
+    Metadata:
+      SamResourceId: ParseFunction
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: alias/aws/sqs
+  Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm when any message is moved to the dead letter queue.
+      AlarmActions:
+      - Ref: IncidentTopic
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Period: 60
+      Namespace: AWS/SQS
+      Threshold: '0'
+      Unit: Count
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - QueueName
+      TreatMissingData: notBreaching
+      Statistic: Maximum
+  IncidentTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: lmp@thetis-apps.com
+        Protocol: email
+      DisplayName:
+        Ref: AWS::AccountId
