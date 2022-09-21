@@ -140,15 +140,24 @@ exports.completionHandler = async (input, x) => {
 		
 		response = await ims.get("suppliers/" + inboundShipment.supplierId);
 		let supplier = response.data;
-		let dataDocument = JSON.parse(supplier.dataDocument);
+		
+		let dataDocument;
+		if (supplier.dataDocument == null) {
+			dataDocument = new Object();
+		} else {
+			dataDocument = JSON.parse(supplier.dataDocument);
+		}
+		
 		let definition = dataDocument.PurchaseInvoiceImport;
-		
- 		let invoice = await parseFromLines(definition, blockMap);
-
-		console.log(JSON.stringify(invoice));
-		
-		await updateInboundShipment(ims, eventId, inboundShipment, invoice);
-
+		if (definition != null) {
+	 		let invoice = await parseFromLines(definition, blockMap);
+			console.log(JSON.stringify(invoice));
+			await updateInboundShipment(ims, eventId, inboundShipment, invoice);
+		} else {
+			definition = { lines: [], maxLineHeight: null, sample: Array.from(blockMap.values()) };
+			dataDocument.PurchaseInvoiceImport = definition;
+			await ims.patch('suppliers/' + supplier.id + '/dataDocument', dataDocument);
+		}
     }        
 
     return "Hello from Lambda!";
@@ -191,14 +200,13 @@ async function parseFromLines(definition, blockMap) {
 							
 							const boundingBox = line.Geometry.BoundingBox;
 							const left = boundingBox.Left;
-							const width = boundingBox.Width;
 							const top = boundingBox.Top;
 							const height = boundingBox.Height;
 							
-							if (top + height > topOfLine + definition.lineHeight) {
+							if (top + height > topOfLine + definition.maxLineHeight) {
 								
 								if (state > 0) {
-									console.log("*** SKIPPING *** " + JSON.stringify(invoiceLine));
+									console.log("*** SKIPPING DUE TO LINE HEIGHT *** " + JSON.stringify(invoiceLine));
 								}
 								
 								state = 0;
