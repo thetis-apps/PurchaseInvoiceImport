@@ -7,8 +7,8 @@ Metadata:
     Description: Application for importing purchase invoices
     Author: thetis-apps
     SpdxLicenseId: Apache-2.0
-    LicenseUrl: ../../LICENSE.txt
-    ReadmeUrl: ../../README.md
+    LicenseUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/4612b8d5aa75b9b9936c9b7b9e6c7e82
+    ReadmeUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/162e20299485663ced360ccbc5d97a13
     Labels:
     - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
@@ -58,10 +58,14 @@ Resources:
         - Id: ExpireRule
           Status: Enabled
           ExpirationInDays: 30
+    Metadata:
+      SamResourceId: Bucket
   CompletionTopic:
     Type: AWS::SNS::Topic
     Properties:
       KmsMasterKeyId: alias/aws/sns
+    Metadata:
+      SamResourceId: CompletionTopic
   CompletionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -77,6 +81,8 @@ Resources:
       Description: Role for Textract to send completion message.
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+    Metadata:
+      SamResourceId: CompletionRole
   Rule:
     Type: AWS::Events::Rule
     Properties:
@@ -96,6 +102,8 @@ Resources:
           Fn::GetAtt:
           - StartFunction
           - Arn
+    Metadata:
+      SamResourceId: Rule
   StartPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -105,6 +113,8 @@ Resources:
         - StartFunction
         - Arn
       Principal: events.amazonaws.com
+    Metadata:
+      SamResourceId: StartPermission
   StartFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -130,7 +140,7 @@ Resources:
             Fn::GetAtt:
             - CompletionRole
             - Arn
-      CodeUri: StartFunction
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/899a04f13c1a2339dba8422622ebe21a
     Metadata:
       SamResourceId: StartFunction
   ParseFunction:
@@ -162,13 +172,15 @@ Resources:
           - Arn
       MemorySize: 2048
       Timeout: 30
-      CodeUri: ParseFunction
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/899a04f13c1a2339dba8422622ebe21a
     Metadata:
       SamResourceId: ParseFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
       KmsMasterKeyId: alias/aws/sqs
+    Metadata:
+      SamResourceId: DeadLetterQueue
   Alarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -190,6 +202,8 @@ Resources:
           - QueueName
       TreatMissingData: notBreaching
       Statistic: Maximum
+    Metadata:
+      SamResourceId: Alarm
   IncidentTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -200,3 +214,5 @@ Resources:
         Protocol: email
       DisplayName:
         Ref: AWS::AccountId
+    Metadata:
+      SamResourceId: IncidentTopic

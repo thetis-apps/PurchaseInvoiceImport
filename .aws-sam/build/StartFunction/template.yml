@@ -13,7 +13,7 @@ Metadata:
     ReadmeUrl: README.md
     Labels: ['thetis-ims']
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: 0.2.0
+    SemanticVersion: 0.2.2
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
@@ -48,13 +48,27 @@ Resources:
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
-        ServerSideEncryptionConfiguration: 
-          - BucketKeyEnabled: true
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: KMS-KEY-ARN  
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireRule
+            Status: Enabled
+            ExpirationInDays: 30
+  
   CompletionTopic:
-      Type: AWS::SNS::Topic
-      Properties: {}
-      
+    Type: AWS::SNS::Topic
+    Properties: 
+      KmsMasterKeyId: alias/aws/sns
+
   CompletionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -180,8 +194,9 @@ Resources:
   IncidentTopic:
     Type: AWS::SNS::Topic
     Properties:
+      KmsMasterKeyId: alias/aws/sns
       Subscription:
-      - Endpoint: lmp@thetis-apps.com
+      - Endpoint: !Ref DevOpsEmail
         Protocol: email
       DisplayName:
         Ref: AWS::AccountId
