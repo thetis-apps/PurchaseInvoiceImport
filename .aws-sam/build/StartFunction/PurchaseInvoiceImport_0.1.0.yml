@@ -1,28 +1,23 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Application for importing purchase invoices
-  
-# Metadata to use for the publishing to the SAR
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: thetis-ims-purchase-invoice-import
     Description: Application for importing purchase invoices
     Author: thetis-apps
     SpdxLicenseId: Apache-2.0
-    LicenseUrl: LICENSE.txt
-    ReadmeUrl: README.md
-    Labels: ['thetis-ims']
+    LicenseUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/4612b8d5aa75b9b9936c9b7b9e6c7e82
+    ReadmeUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/162e20299485663ced360ccbc5d97a13
+    Labels:
+    - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: 0.2.0
+    SemanticVersion: '0.1.0'
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Runtime: nodejs16.x
     MemorySize: 512
-
-# Parameters of the application 
 Parameters:
   ContextId:
     Type: String
@@ -41,20 +36,23 @@ Parameters:
     Type: String
     MinLength: 1
   DevOpsEmail:
-    Description: The email address to send mail to when messages in the dead letter queue.
+    Description: The email address to send mail to when messages in the dead letter
+      queue.
     Type: String
-    
 Resources:
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
-        ServerSideEncryptionConfiguration: 
-          - BucketKeyEnabled: true
+        ServerSideEncryptionConfiguration:
+        - BucketKeyEnabled: true
+    Metadata:
+      SamResourceId: Bucket
   CompletionTopic:
-      Type: AWS::SNS::Topic
-      Properties: {}
-      
+    Type: AWS::SNS::Topic
+    Properties: {}
+    Metadata:
+      SamResourceId: CompletionTopic
   CompletionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -70,6 +68,8 @@ Resources:
       Description: Role for Textract to send completion message.
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+    Metadata:
+      SamResourceId: CompletionRole
   Rule:
     Type: AWS::Events::Rule
     Properties:
@@ -89,6 +89,8 @@ Resources:
           Fn::GetAtt:
           - StartFunction
           - Arn
+    Metadata:
+      SamResourceId: Rule
   StartPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -98,6 +100,8 @@ Resources:
         - StartFunction
         - Arn
       Principal: events.amazonaws.com
+    Metadata:
+      SamResourceId: StartPermission
   StartFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -123,6 +127,9 @@ Resources:
             Fn::GetAtt:
             - CompletionRole
             - Arn
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/1f22975307f58fd76d58a0d2ab813fb0
+    Metadata:
+      SamResourceId: StartFunction
   ParseFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -152,10 +159,15 @@ Resources:
           - Arn
       MemorySize: 2048
       Timeout: 30
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/1f22975307f58fd76d58a0d2ab813fb0
+    Metadata:
+      SamResourceId: ParseFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue
-    Properties: 
+    Properties:
       KmsMasterKeyId: alias/aws/sqs
+    Metadata:
+      SamResourceId: DeadLetterQueue
   Alarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -177,6 +189,8 @@ Resources:
           - QueueName
       TreatMissingData: notBreaching
       Statistic: Maximum
+    Metadata:
+      SamResourceId: Alarm
   IncidentTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -185,3 +199,5 @@ Resources:
         Protocol: email
       DisplayName:
         Ref: AWS::AccountId
+    Metadata:
+      SamResourceId: IncidentTopic

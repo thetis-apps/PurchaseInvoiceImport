@@ -154,7 +154,7 @@ exports.completionHandler = async (input, x) => {
 			console.log(JSON.stringify(invoice));
 			await updateInboundShipment(ims, eventId, inboundShipment, invoice);
 		} else {
-			definition = { lines: [], maxLineHeight: null, sample: Array.from(blockMap.values()) };
+			definition = { lines: [], maxLineHeight: null };
 			dataDocument.PurchaseInvoiceImport = definition;
 			await ims.patch('suppliers/' + supplier.id + '/dataDocument', dataDocument);
 		}
