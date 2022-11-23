@@ -395,7 +395,8 @@ async function updateInboundShipment(ims, eventId, inboundShipment, invoice) {
     		
 			let eventMessage = {
 				messageType: "WARNING",
-				messageText: 'Cannot find trade item matching line ' + line.lineNumber + ' on page ' + line.pageNumber,
+				messageText: 'Cannot find trade item matching line ' + line.lineNumber + ' on page ' + line.pageNumber + 
+						'The line was parsed as ' + JSON.stringify(line),
 	            time: Date.now(),
             	source: "Purchase Invoice Import" };
             	
