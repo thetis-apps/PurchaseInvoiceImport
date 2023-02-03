@@ -12,7 +12,7 @@ Metadata:
     Labels:
     - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: '0.2.3'
+    SemanticVersion: '0.2.5'
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 Globals:
   Function:
@@ -50,9 +50,7 @@ Resources:
         RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: aws:kms
-            KMSMasterKeyID: KMS-KEY-ARN
+        - BucketKeyEnabled: true
       LifecycleConfiguration:
         Rules:
         - Id: ExpireRule
