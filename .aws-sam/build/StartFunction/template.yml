@@ -13,7 +13,7 @@ Metadata:
     ReadmeUrl: README.md
     Labels: ['thetis-ims']
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: 0.2.5
+    SemanticVersion: 0.2.6
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
@@ -31,7 +31,7 @@ Parameters:
   ClientId:
     Description: Key of the parameter that has your Thetis client id as its value.
     Type: AWS::SSM::Parameter::Value<String>
-    Default: ThetisClientId
+    Default: ThetisClientId 
   ClientSecret:
     Description: Key of the parameter that has your Thetis client secret as its value.
     Type: AWS::SSM::Parameter::Value<String>
@@ -45,6 +45,26 @@ Parameters:
     Type: String
     
 Resources:
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties: 
+      Bucket: !Ref Bucket
+      PolicyDocument: 
+        Id: ExamplePolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowSSLRequestsOnly
+          Action: s3:*
+          Effect: Deny
+          Resource: !Join
+            - ''
+            - - 'arn:aws:s3:::'
+              - !Ref Bucket
+              - /*
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+          Principal: "*"
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -55,18 +75,20 @@ Resources:
         RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - BucketKeyEnabled: true
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: KMS-KEY-ARN      
       LifecycleConfiguration:
         Rules:
           - Id: ExpireRule
             Status: Enabled
             ExpirationInDays: 30
-  
+      LoggingConfiguration:
+        LogFilePrefix: access-logs  
   CompletionTopic:
     Type: AWS::SNS::Topic
     Properties: 
       KmsMasterKeyId: alias/aws/sns
-
   CompletionRole:
     Type: AWS::IAM::Role
     Properties:

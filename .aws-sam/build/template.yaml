@@ -12,7 +12,7 @@ Metadata:
     Labels:
     - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: '0.2.5'
+    SemanticVersion: '0.2.6'
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 Globals:
   Function:
@@ -40,6 +40,28 @@ Parameters:
       queue.
     Type: String
 Resources:
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: Bucket
+      PolicyDocument:
+        Id: ExamplePolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowSSLRequestsOnly
+          Action: s3:*
+          Effect: Deny
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: Bucket
+              - /*
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+          Principal: '*'
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -50,12 +72,16 @@ Resources:
         RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-        - BucketKeyEnabled: true
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: aws:kms
+            KMSMasterKeyID: KMS-KEY-ARN
       LifecycleConfiguration:
         Rules:
         - Id: ExpireRule
           Status: Enabled
           ExpirationInDays: 30
+      LoggingConfiguration:
+        LogFilePrefix: access-logs
   CompletionTopic:
     Type: AWS::SNS::Topic
     Properties:
