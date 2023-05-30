@@ -12,7 +12,7 @@ Metadata:
     Labels:
     - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: '0.1.0'
+    SemanticVersion: '0.2.6'
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 Globals:
   Function:
@@ -40,17 +40,56 @@ Parameters:
       queue.
     Type: String
 Resources:
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: Bucket
+      PolicyDocument:
+        Id: ExamplePolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowSSLRequestsOnly
+          Action: s3:*
+          Effect: Deny
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: Bucket
+              - /*
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+          Principal: '*'
+    Metadata:
+      SamResourceId: BucketPolicy
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-        - BucketKeyEnabled: true
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: aws:kms
+            KMSMasterKeyID: KMS-KEY-ARN
+      LifecycleConfiguration:
+        Rules:
+        - Id: ExpireRule
+          Status: Enabled
+          ExpirationInDays: 30
+      LoggingConfiguration:
+        LogFilePrefix: access-logs
     Metadata:
       SamResourceId: Bucket
   CompletionTopic:
     Type: AWS::SNS::Topic
-    Properties: {}
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
     Metadata:
       SamResourceId: CompletionTopic
   CompletionRole:
@@ -127,7 +166,7 @@ Resources:
             Fn::GetAtt:
             - CompletionRole
             - Arn
-      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/1f22975307f58fd76d58a0d2ab813fb0
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/728851755d79435a83d2f18ac6b42b23
     Metadata:
       SamResourceId: StartFunction
   ParseFunction:
@@ -159,7 +198,7 @@ Resources:
           - Arn
       MemorySize: 2048
       Timeout: 30
-      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/1f22975307f58fd76d58a0d2ab813fb0
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/728851755d79435a83d2f18ac6b42b23
     Metadata:
       SamResourceId: ParseFunction
   DeadLetterQueue:
@@ -194,8 +233,10 @@ Resources:
   IncidentTopic:
     Type: AWS::SNS::Topic
     Properties:
+      KmsMasterKeyId: alias/aws/sns
       Subscription:
-      - Endpoint: lmp@thetis-apps.com
+      - Endpoint:
+          Ref: DevOpsEmail
         Protocol: email
       DisplayName:
         Ref: AWS::AccountId
