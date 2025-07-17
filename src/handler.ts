@@ -165,7 +165,7 @@ exports.analyzeHandler = async (event: any, _x: any) => {
 			currencyCode: 'DKK',
 			purchaseInvoiceDate: invoiceDate,
 			purchaseInvoiceNumber: invoiceNumber,
-			supplierId: detail.data.supplierId,
+			supplierId: detail.data.id,
 			purchaseInvoiceLines
 		}
 

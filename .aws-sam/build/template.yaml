@@ -91,7 +91,7 @@ Resources:
         - fileAttached
         detail:
           entityName:
-          - InboundShipment
+          - Supplier
           contextId:
           - Ref: ContextId
           attachmentType:
