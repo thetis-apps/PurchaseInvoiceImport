@@ -12,11 +12,11 @@ Metadata:
     Labels:
     - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: '0.2.7'
+    SemanticVersion: 2.0.0
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 Globals:
   Function:
-    Runtime: nodejs16.x
+    Runtime: nodejs18.x
     MemorySize: 512
 Parameters:
   ContextId:
@@ -73,8 +73,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
         - ServerSideEncryptionByDefault:
-            SSEAlgorithm: aws:kms
-            KMSMasterKeyID: KMS-KEY-ARN
+            SSEAlgorithm: AES256
       LifecycleConfiguration:
         Rules:
         - Id: ExpireRule
@@ -82,25 +81,6 @@ Resources:
           ExpirationInDays: 30
       LoggingConfiguration:
         LogFilePrefix: access-logs
-  CompletionTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      KmsMasterKeyId: alias/aws/sns
-  CompletionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - textract.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Description: Role for Textract to send completion message.
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/AmazonSNSFullAccess
   Rule:
     Type: AWS::Events::Rule
     Properties:
@@ -114,25 +94,27 @@ Resources:
           - InboundShipment
           contextId:
           - Ref: ContextId
+          attachmentType:
+          - PURCHASE_INVOICE
       Targets:
       - Id: EventTarget
         Arn:
           Fn::GetAtt:
-          - StartFunction
+          - AnalyzeFunction
           - Arn
-  StartPermission:
+  AnalyzePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName:
         Fn::GetAtt:
-        - StartFunction
+        - AnalyzeFunction
         - Arn
       Principal: events.amazonaws.com
-  StartFunction:
+  AnalyzeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handler.startHandler
+      Handler: built/handler.analyzeHandler
       MemorySize: 2048
       Timeout: 30
       Policies:
@@ -148,47 +130,15 @@ Resources:
         Variables:
           BucketName:
             Ref: Bucket
-          CompletionTopic:
-            Ref: CompletionTopic
-          CompletionRole:
-            Fn::GetAtt:
-            - CompletionRole
-            - Arn
-      CodeUri: StartFunction
-    Metadata:
-      SamResourceId: StartFunction
-  ParseFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/handler.completionHandler
-      Policies:
-      - AmazonTextractFullAccess
-      Events:
-        Complete:
-          Type: SNS
-          Properties:
-            Topic:
-              Ref: CompletionTopic
-            FilterPolicy: {}
-      Environment:
-        Variables:
           ClientId:
             Ref: ClientId
           ClientSecret:
             Ref: ClientSecret
           ApiKey:
             Ref: ApiKey
-      DeadLetterQueue:
-        Type: SQS
-        TargetArn:
-          Fn::GetAtt:
-          - DeadLetterQueue
-          - Arn
-      MemorySize: 2048
-      Timeout: 30
-      CodeUri: ParseFunction
+      CodeUri: AnalyzeFunction
     Metadata:
-      SamResourceId: ParseFunction
+      SamResourceId: AnalyzeFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:

@@ -1,28 +1,23 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Application for importing purchase invoices
-  
-# Metadata to use for the publishing to the SAR
 Metadata:
   AWS::ServerlessRepo::Application:
     Name: thetis-ims-purchase-invoice-import
     Description: Application for importing purchase invoices
     Author: thetis-apps
     SpdxLicenseId: Apache-2.0
-    LicenseUrl: LICENSE.txt
-    ReadmeUrl: README.md
-    Labels: ['thetis-ims']
+    LicenseUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/4612b8d5aa75b9b9936c9b7b9e6c7e82
+    ReadmeUrl: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/162e20299485663ced360ccbc5d97a13
+    Labels:
+    - thetis-ims
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: 2.0.0
+    SemanticVersion: 1.0.3
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Runtime: nodejs18.x
+    Runtime: nodejs16.x
     MemorySize: 512
-
-# Parameters of the application 
 Parameters:
   ContextId:
     Type: String
@@ -31,7 +26,7 @@ Parameters:
   ClientId:
     Description: Key of the parameter that has your Thetis client id as its value.
     Type: AWS::SSM::Parameter::Value<String>
-    Default: ThetisClientId 
+    Default: ThetisClientId
   ClientSecret:
     Description: Key of the parameter that has your Thetis client secret as its value.
     Type: AWS::SSM::Parameter::Value<String>
@@ -41,30 +36,34 @@ Parameters:
     Type: String
     MinLength: 1
   DevOpsEmail:
-    Description: The email address to send mail to when messages in the dead letter queue.
+    Description: The email address to send mail to when messages in the dead letter
+      queue.
     Type: String
-    
 Resources:
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Properties: 
-      Bucket: !Ref Bucket
-      PolicyDocument: 
+    Properties:
+      Bucket:
+        Ref: Bucket
+      PolicyDocument:
         Id: ExamplePolicy
         Version: '2012-10-17'
         Statement:
         - Sid: AllowSSLRequestsOnly
           Action: s3:*
           Effect: Deny
-          Resource: !Join
+          Resource:
+            Fn::Join:
             - ''
             - - 'arn:aws:s3:::'
-              - !Ref Bucket
+              - Ref: Bucket
               - /*
           Condition:
             Bool:
               aws:SecureTransport: 'false'
-          Principal: "*"
+          Principal: '*'
+    Metadata:
+      SamResourceId: BucketPolicy
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -75,15 +74,40 @@ Resources:
         RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'AES256'
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
       LifecycleConfiguration:
         Rules:
-          - Id: ExpireRule
-            Status: Enabled
-            ExpirationInDays: 30
+        - Id: ExpireRule
+          Status: Enabled
+          ExpirationInDays: 30
       LoggingConfiguration:
-        LogFilePrefix: access-logs  
+        LogFilePrefix: access-logs
+    Metadata:
+      SamResourceId: Bucket
+  CompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
+    Metadata:
+      SamResourceId: CompletionTopic
+  CompletionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - textract.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Description: Role for Textract to send completion message.
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+    Metadata:
+      SamResourceId: CompletionRole
   Rule:
     Type: AWS::Events::Rule
     Properties:
@@ -103,21 +127,25 @@ Resources:
       - Id: EventTarget
         Arn:
           Fn::GetAtt:
-          - AnalyzeFunction
+          - StartFunction
           - Arn
-  AnalyzePermission:
+    Metadata:
+      SamResourceId: Rule
+  StartPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName:
         Fn::GetAtt:
-        - AnalyzeFunction
+        - StartFunction
         - Arn
       Principal: events.amazonaws.com
-  AnalyzeFunction:
+    Metadata:
+      SamResourceId: StartPermission
+  StartFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: built/handler.analyzeHandler
+      Handler: built/handler.startHandler
       MemorySize: 2048
       Timeout: 30
       Policies:
@@ -133,13 +161,50 @@ Resources:
         Variables:
           BucketName:
             Ref: Bucket
+          CompletionTopic:
+            Ref: CompletionTopic
+          CompletionRole:
+            Fn::GetAtt:
+            - CompletionRole
+            - Arn
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/0df8ceb4128a83b5b18b4fbd085fccc9
+    Metadata:
+      SamResourceId: StartFunction
+  ParseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: built/handler.completionHandler
+      Policies:
+      - AmazonTextractFullAccess
+      Events:
+        Complete:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: CompletionTopic
+            FilterPolicy: {}
+      Environment:
+        Variables:
           ClientId:
             Ref: ClientId
           ClientSecret:
             Ref: ClientSecret
           ApiKey:
             Ref: ApiKey
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+      MemorySize: 2048
+      Timeout: 30
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3/0df8ceb4128a83b5b18b4fbd085fccc9
+    Metadata:
+      SamResourceId: ParseFunction
   DeadLetterQueue:
     Type: AWS::SQS::Queue
-    Properties: 
+    Properties:
       KmsMasterKeyId: alias/aws/sqs
+    Metadata:
+      SamResourceId: DeadLetterQueue

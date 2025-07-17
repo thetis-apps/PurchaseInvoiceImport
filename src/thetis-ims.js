@@ -1,0 +1,1 @@
+console.log("This is a dummy file for Vite scanning.");

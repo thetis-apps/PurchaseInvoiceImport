@@ -1,0 +1,27 @@
+{
+  "topMarginFirstPage": 0.23,
+  "topMarginFollowingPages": 0.12,
+  "bottomMargin": 0.05,
+  "fields": [
+    {
+      "x": 0.03,
+      "maxWidth": 0.10,
+      "target": "ITEM_NUMBER"
+    },
+    {
+      "x": 0.76,
+      "maxWidth": 0.05,
+      "target": "QTY"
+    },
+    {
+      "x": 0.17,
+      "maxWidth": 0.07,
+      "target": "PRICE"
+    },
+    {
+      "x": 0.88,
+      "maxWidth": 0.10,
+      "target": "AMOUNT"
+    }
+  ]
+}

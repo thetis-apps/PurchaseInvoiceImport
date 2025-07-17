@@ -7,5 +7,5 @@ s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1q52gionhjeg3"
 s3_prefix = "TestPurchaseInvoiceImport"
 region = "eu-west-1"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "ContextId=\"550\" ClientId=\"ThetisClientId\" ClientSecret=\"ThetisClientSecret\" ApiKey=\"b495480a-181c-4608-ab12-d72977776395\" DevOpsEmail=\"devops@thetis-ims.com\""
+parameter_overrides = "ContextId=\"694\" ClientId=\"ThetisClientId\" ClientSecret=\"ThetisClientSecret\" ApiKey=\"2f38b13d-4246-40fc-9118-dd271dd2e33e\" DevOpsEmail=\"devops@thetis-ims.com\""
 image_repositories = []
