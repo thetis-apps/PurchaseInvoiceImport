@@ -1908,39 +1908,28 @@ export interface ContactPerson {
 }
 
 export interface PurchaseInvoice {
-    id?: number;
-    contextId?: number;
-    supplierId: number;
+    readonly id?: number;
+    readonly contextId?: number;
+    readonly supplierId: number;
     currencyCode?: CurrencyCode;
-    timeCreated?: Date;
-    localizedTimeCreated?: string;
-    timeLastUpdated?: Date;
-    localizedTimeLastUpdated?: string;
-    timeLastPaid?: Date;
-    localizedTimeLastPaid?: string;
-    timeLastSent?: Date;
-    localizedTimeLastSent?: string;
-    timeLastReceived?: Date;
+    readonly timeCreated?: Date;
+    readonly localizedTimeCreated?: string;
     purchaseInvoiceNumber: string;
-    purchaseInvoiceDate: string;
-    data: string;
+    purchaseInvoiceDate: string | null;
     purchaseInvoiceLines: PurchaseInvoiceLine[];
     finalized: boolean;
 }
 
 export interface PurchaseInvoiceLine {
-    id?: number;
-    contextId?: number;
-    data: string;
-    purchaseInvoiceId?: number;
-    purchaseInvoiceNumber?: string;
-    indexedPosition: string;
-    itemNumber: string;
-    itemDescription?: string;
-    quantity: number;
-    amount: number;
-    allocatedQuantity?: number;
-    allocatedAmount?: number;
+    readonly id?: number;
+    readonly contextId?: number;
+    readonly purchaseInvoiceId?: number;
+    readonly purchaseInvoiceNumber?: string;
+    readonly indexedPosition: string;
+    supplierItemNumber?: string | null;
+    supplierItemDescription?: string | null;
+    quantity?: number | null;
+    amount?: number | null;
 }
 
 export interface PurchaseInvoiceAllocation {
@@ -1948,8 +1937,6 @@ export interface PurchaseInvoiceAllocation {
     purchaseInvoiceLineId: number;
     inboundShipmentLineId: number;
     numItems: number;
-    quantity: number;
-    amount: number;
 }
 
 export interface Cloneable {

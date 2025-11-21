@@ -13,7 +13,7 @@ Metadata:
     ReadmeUrl: README.md
     Labels: ['thetis-ims']
     HomePageUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
-    SemanticVersion: 2.0.0
+    SemanticVersion: 2.0.23
     SourceCodeUrl: https://github.com/thetis-apps/PurchaseInvoiceImport
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
@@ -43,47 +43,54 @@ Parameters:
   DevOpsEmail:
     Description: The email address to send mail to when messages in the dead letter queue.
     Type: String
-    
+
 Resources:
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties: 
-      Bucket: !Ref Bucket
-      PolicyDocument: 
-        Id: ExamplePolicy
+
+  CompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
+
+  CompletionTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref CompletionTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: textract.amazonaws.com
+            Action: "SNS:Publish"
+            Resource: "*"
+
+  TextractRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - Sid: AllowSSLRequestsOnly
-          Action: s3:*
-          Effect: Deny
-          Resource: !Join
-            - ''
-            - - 'arn:aws:s3:::'
-              - !Ref Bucket
-              - /*
-          Condition:
-            Bool:
-              aws:SecureTransport: 'false'
-          Principal: "*"
-  Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'AES256'
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireRule
-            Status: Enabled
-            ExpirationInDays: 30
-      LoggingConfiguration:
-        LogFilePrefix: access-logs  
+          - Effect: Allow
+            Principal:
+              Service: textract.amazonaws.com
+            Action: sts:AssumeRole
+      Description: Role for Textract to use when doing analysis.
+      Policies:
+        - PolicyName: TextractSNSPublishAndS3Read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref CompletionTopic
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: "arn:aws:s3:::thetis-ims-test/*"
+
+  # Initial Rule for fileAttached event
   Rule:
     Type: AWS::Events::Rule
     Properties:
@@ -103,21 +110,25 @@ Resources:
       - Id: EventTarget
         Arn:
           Fn::GetAtt:
-          - AnalyzeFunction
+          - StartAnalysisFunction
           - Arn
-  AnalyzePermission:
+
+  # Permission for EventBridge to invoke Lambda
+  StartAnalysisPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName:
         Fn::GetAtt:
-        - AnalyzeFunction
+        - StartAnalysisFunction
         - Arn
       Principal: events.amazonaws.com
-  AnalyzeFunction:
+
+  # Lambda function that starts the analysis process
+  StartAnalysisFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: built/handler.analyzeHandler
+      Handler: built/handler.startAnalysisHandler
       MemorySize: 2048
       Timeout: 30
       Policies:
@@ -131,15 +142,75 @@ Resources:
           - Arn
       Environment:
         Variables:
-          BucketName:
-            Ref: Bucket
           ClientId:
             Ref: ClientId
           ClientSecret:
             Ref: ClientSecret
           ApiKey:
             Ref: ApiKey
+          CompletionTopic:
+            Ref: CompletionTopic
+          TextractRole:
+            !GetAtt TextractRole.Arn
+
+  # Lambda function that processes the analysis results
+  ProcessResultsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: built/handler.processResultsHandler
+      MemorySize: 2048
+      Timeout: 30
+      Policies:
+      - AmazonTextractFullAccess
+      - AmazonS3FullAccess
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+      Environment:
+        Variables:
+          ClientId:
+            Ref: ClientId
+          ClientSecret:
+            Ref: ClientSecret
+          ApiKey:
+            Ref: ApiKey
+      Events:
+        TextractCompletion:
+          Type: SNS
+          Properties:
+            Topic: !Ref CompletionTopic
+
+  # Dead letter queue for failed executions
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties: 
       KmsMasterKeyId: alias/aws/sqs
+
+  # Alarm for DLQ
+  DeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm for messages in the DLQ
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref DeadLetterQueueTopic
+
+  # SNS Topic for DLQ alerts
+  DeadLetterQueueTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref DevOpsEmail

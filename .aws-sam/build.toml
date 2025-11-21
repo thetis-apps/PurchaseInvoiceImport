@@ -7,6 +7,6 @@ architecture = "x86_64"
 handler = "built/handler.analyzeHandler"
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["AnalyzeFunction"]
+functions = ["StartAnalysisFunction", "ProcessResultsFunction"]
 
 [layer_build_definitions]
